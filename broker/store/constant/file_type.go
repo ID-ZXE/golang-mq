@@ -12,6 +12,6 @@ func GetFilePath(fileType FileType) string {
 	return "/"
 }
 
-func getFileSize(fileType FileType) int {
+func GetFileSize(fileType FileType) int64 {
 	return 0
 }

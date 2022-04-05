@@ -2,7 +2,7 @@ package config
 
 import "os"
 
-const TOY_MQ = "toy-mq"
+const GOLANG_MQ = "golang-mq"
 
 const (
 	COMMIT_LOG_SIZE     = 0
@@ -17,7 +17,7 @@ var (
 )
 
 func init() {
-	commitlogPath = os.Getenv("user.home") + "/" + TOY_MQ + "/" + "commitlog" + "/"
-	consumeQueuePath = os.Getenv("user.home") + "/" + TOY_MQ + "/" + "consumeQueue" + "/"
-	consumeOffsetPath = os.Getenv("user.home") + "/" + TOY_MQ + "/" + "consumeOffset" + "/"
+	commitlogPath = os.Getenv("user.home") + "/" + GOLANG_MQ + "/" + "commitlog" + "/"
+	consumeQueuePath = os.Getenv("user.home") + "/" + GOLANG_MQ + "/" + "consumeQueue" + "/"
+	consumeOffsetPath = os.Getenv("user.home") + "/" + GOLANG_MQ + "/" + "consumeOffset" + "/"
 }
