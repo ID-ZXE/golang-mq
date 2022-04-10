@@ -1,17 +1,36 @@
-package store
+package constant
+
+import (
+	"broker/config"
+	"fmt"
+)
 
 type FileType string
 
 const (
-	COMMITLOG      FileType = "COMMITLOG"
-	CONSUME_QUEUE  FileType = "CONSUME_QUEUE"
-	CONSUME_OFFSET FileType = "CONSUME_OFFSET"
+	Commitlog     FileType = "Commitlog"
+	ConsumeQueue  FileType = "ConsumeQueue"
+	ConsumeOffset FileType = "ConsumeOffset"
 )
 
 func GetFilePath(fileType FileType) string {
-	return "/"
+	if fileType == Commitlog {
+		return config.CommitlogPath
+	} else if fileType == ConsumeQueue {
+		return config.ConsumeQueuePath
+	} else if fileType == ConsumeOffset {
+		return config.ConsumeOffsetPath
+	}
+	panic(fmt.Sprintf("fileType %s not exist", fileType))
 }
 
 func GetFileSize(fileType FileType) int64 {
-	return 0
+	if fileType == Commitlog {
+		return config.CommitLogSize
+	} else if fileType == ConsumeQueue {
+		return config.ConsumeQueueSize
+	} else if fileType == ConsumeOffset {
+		return config.ConsumeOffsetSize
+	}
+	panic(fmt.Sprintf("fileType %s not exist", fileType))
 }

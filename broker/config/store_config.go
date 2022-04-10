@@ -1,23 +1,20 @@
 package config
 
-import "os"
+import (
+	"github.com/common/constant"
+	"os"
+)
 
-const GOLANG_MQ = "golang-mq"
+const GolangMq = "golang-mq"
 
 const (
-	COMMIT_LOG_SIZE     = 0
-	CONSUME_QUEUE_SIZE  = 0
-	CONSUME_OFFSET_SIZE = 0
+	CommitLogSize     = 8 * constant.KB
+	ConsumeQueueSize  = constant.KB
+	ConsumeOffsetSize = 8 * constant.B
 )
 
 var (
-	commitlogPath     = ""
-	consumeQueuePath  = ""
-	consumeOffsetPath = ""
+	CommitlogPath     = os.Getenv("HOME") + "/" + GolangMq + "/" + "commitlog" + "/"
+	ConsumeQueuePath  = os.Getenv("HOME") + "/" + GolangMq + "/" + "consumeQueue" + "/"
+	ConsumeOffsetPath = os.Getenv("HOME") + "/" + GolangMq + "/" + "consumeOffset" + "/"
 )
-
-func init() {
-	commitlogPath = os.Getenv("user.home") + "/" + GOLANG_MQ + "/" + "commitlog" + "/"
-	consumeQueuePath = os.Getenv("user.home") + "/" + GOLANG_MQ + "/" + "consumeQueue" + "/"
-	consumeOffsetPath = os.Getenv("user.home") + "/" + GOLANG_MQ + "/" + "consumeOffset" + "/"
-}
