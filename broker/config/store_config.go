@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/common/constant"
+	"github.com/mqcommon/constant"
 	"os"
 )
 

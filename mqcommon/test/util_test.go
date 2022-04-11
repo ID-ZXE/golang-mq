@@ -1,7 +1,8 @@
 package test
 
 import (
-	"broker/utils"
+	"mqcommon/message"
+	"mqcommon/utils"
 	"testing"
 )
 
@@ -29,4 +30,14 @@ func int2ByteHH(n int32) []byte {
 	bytes[1] = (byte)(n >> 16 & 0xff)
 	bytes[0] = (byte)(n >> 24 & 0xff)
 	return bytes
+}
+
+func TestJson(t *testing.T) {
+	testMessage := &message.Message{MsgId: "test-id", Body: "hello world", Topic: "test-topic"}
+	jsonString := utils.ToJsonString(testMessage)
+	println(jsonString)
+
+	testMessage2 := &message.Message{}
+	utils.JsonStringToBean(jsonString, testMessage2)
+	println(testMessage2.Body)
 }

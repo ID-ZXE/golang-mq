@@ -1,6 +1,6 @@
 module broker
 
-require github.com/common v0.0.0
-replace github.com/common => ../common
+require github.com/mqcommon v0.0.0
+replace github.com/mqcommon => ../mqcommon
 
 go 1.17

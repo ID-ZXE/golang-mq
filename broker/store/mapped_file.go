@@ -2,9 +2,9 @@ package store
 
 import (
 	"broker/store/constant"
-	"broker/utils"
 	"bufio"
 	"fmt"
+	"github.com/mqcommon/utils"
 	"io"
 	"os"
 	"path/filepath"
@@ -41,7 +41,7 @@ func NewMappedFile(fileType constant.FileType, fileName string) *MappedFile {
 	dir, _ := filepath.Split(filePath)
 	ensureDirExist(dir)
 
-	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0777)
+	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		panic(err)
 	}
@@ -128,8 +128,19 @@ func (mappedFile MappedFile) UpdateInt(offset int64) (err error) {
 	return
 }
 
+//func (mappedFile MappedFile) LoadMessage(offset int64, size int) *message.Message {
+//	fileInfo, _ := mappedFile.file.Stat()
+//	if offset+int64(size) > fileInfo.Size() {
+//		return nil
+//	}
+//	// todo 后续再处理异常
+//	_, _ = mappedFile.file.Seek(offset, io.SeekStart)
+//	data := make([]byte, size)
+//	_, _ = mappedFile.reader.Read(data)
+//	return message.ToMessage(data)
+//}
+
 // getFileName
-// loadMessage
 // getLong
 // updateLong
 // setWrote
