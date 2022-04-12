@@ -3,8 +3,8 @@ package store
 import (
 	"broker/store/constant"
 	"bufio"
-	"fmt"
-	"github.com/mqcommon/utils"
+	"github.com/common/message"
+	"github.com/common/utils"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,14 +14,14 @@ import (
 type MessageAppendResult string
 
 const (
-	OK                 = "OK"                 // 追加成功
-	INSUFFICIENT_SPACE = "INSUFFICIENT_SPACE" // 权限不够
-	IoException        = "IO_EXCEPTION"       // io操作错误
+	OK                MessageAppendResult = "OK"                // 追加成功
+	InsufficientSpace MessageAppendResult = "InsufficientSpace" // 权限不够
+	IoException       MessageAppendResult = "IoException"       // io操作错误
 )
 
 const (
-	INT_LENGTH  = 4
-	LONG_LENGTH = 8
+	IntLength  = 4
+	LongLength = 8
 )
 
 type MappedFile struct {
@@ -30,9 +30,9 @@ type MappedFile struct {
 	fileName   string        //文件名
 	writer     *bufio.Writer //操作写
 	reader     *bufio.Reader //操作读
-	fromOffset int           //文件起始offset
+	fromOffset int64         //文件起始offset
 	fileSize   int64         //文件大小
-	wroteSize  int64         //当前写入位置
+	wrotePos   int64         //当前写入位置
 }
 
 func NewMappedFile(fileType constant.FileType, fileName string) *MappedFile {
@@ -45,10 +45,10 @@ func NewMappedFile(fileType constant.FileType, fileName string) *MappedFile {
 	if err != nil {
 		panic(err)
 	}
-	return NEW2(fileType, filePath, file)
+	return newMappedFile(fileType, filePath, file)
 }
 
-func NEW2(fileType constant.FileType, filePath string, file *os.File) *MappedFile {
+func newMappedFile(fileType constant.FileType, filePath string, file *os.File) *MappedFile {
 	mappedFile := &MappedFile{}
 	mappedFile.file = file
 	mappedFile.fileSize = constant.GetFileSize(fileType)
@@ -56,12 +56,13 @@ func NEW2(fileType constant.FileType, filePath string, file *os.File) *MappedFil
 	mappedFile.filePath = filePath
 	mappedFile.reader = bufio.NewReader(file)
 	mappedFile.writer = bufio.NewWriter(file)
+	mappedFile.wrotePos = 0
 
 	if fileType == constant.Commitlog {
-		fromOffset, _ := strconv.Atoi(mappedFile.fileName)
+		fromOffset, _ := strconv.ParseInt(mappedFile.fileName, 10, 64)
 		mappedFile.fromOffset = fromOffset
 	} else if fileType == constant.ConsumeQueue {
-		fromOffset, _ := strconv.Atoi(mappedFile.fileName)
+		fromOffset, _ := strconv.ParseInt(mappedFile.fileName, 10, 64)
 		mappedFile.fromOffset = fromOffset
 	} else if fileType == constant.ConsumeOffset {
 		mappedFile.fromOffset = 0
@@ -85,17 +86,13 @@ func ensureDirExist(dirName string) {
 }
 
 func (mappedFile *MappedFile) Append(data []byte) MessageAppendResult {
-	mappedFile.checkRemainSize(int64(len(data)))
-
-	length := len(data)
-	lengthBytes := utils.Int32ToBytes(int32(length))
-	bytes := append(lengthBytes, data...)
-
-	_, err := mappedFile.writer.Write(bytes)
-	if err != nil {
-		return IoException
+	if !mappedFile.checkRemainSize(int64(len(data))) {
+		return InsufficientSpace
 	}
-	err = mappedFile.writer.Flush()
+
+	_, _ = mappedFile.file.Seek(0, io.SeekEnd)
+
+	_, err := mappedFile.writer.Write(data)
 	if err != nil {
 		return IoException
 	}
@@ -103,42 +100,61 @@ func (mappedFile *MappedFile) Append(data []byte) MessageAppendResult {
 	return OK
 }
 
+func (mappedFile *MappedFile) Flush() {
+	_ = mappedFile.writer.Flush()
+}
+
 func (mappedFile *MappedFile) checkRemainSize(size int64) bool {
-	return mappedFile.wroteSize+size <= mappedFile.fileSize
+	return mappedFile.wrotePos+size <= mappedFile.fileSize
 }
 
 func (mappedFile MappedFile) GetInt(offset int64) int {
-	// todo 后续再处理异常
-	_, _ = mappedFile.file.Seek(offset, io.SeekStart)
-
 	intBytes := make([]byte, 4)
-	read, err := mappedFile.reader.Read(intBytes)
-	if read != 4 || err != nil {
-		panic(fmt.Sprintf("read byte size != 4, or %v", err))
-	}
-	return int(utils.BytesToInt32(intBytes))
+	readByNewFileHandle(mappedFile.filePath, offset, intBytes)
+	return utils.BytesToInt(intBytes)
 }
 
 func (mappedFile MappedFile) UpdateInt(offset int64) (err error) {
 	_, err = mappedFile.file.Seek(offset, io.SeekStart)
 
-	int32Bytes := utils.Int32ToBytes(int32(offset))
+	int32Bytes := utils.IntToBytes(int(offset))
 	_, _ = mappedFile.writer.Write(int32Bytes)
 
 	return
 }
 
-//func (mappedFile MappedFile) LoadMessage(offset int64, size int) *message.Message {
-//	fileInfo, _ := mappedFile.file.Stat()
-//	if offset+int64(size) > fileInfo.Size() {
-//		return nil
-//	}
-//	// todo 后续再处理异常
-//	_, _ = mappedFile.file.Seek(offset, io.SeekStart)
-//	data := make([]byte, size)
-//	_, _ = mappedFile.reader.Read(data)
-//	return message.ToMessage(data)
-//}
+func (mappedFile MappedFile) LoadMessage(offset int64, size int) *message.Message {
+	fileInfo, _ := mappedFile.file.Stat()
+	if offset+int64(size) > fileInfo.Size() {
+		return nil
+	}
+	data := make([]byte, size)
+	readByNewFileHandle(mappedFile.filePath, offset, data)
+	return message.ToMessage(data)
+}
+
+func (mappedFile *MappedFile) GetFromOffset() int64 {
+	return mappedFile.fromOffset
+}
+
+func (mappedFile *MappedFile) GetWrotePos() int64 {
+	return mappedFile.wrotePos
+}
+
+// 起一个新的文件句柄读取数据
+func readByNewFileHandle(filePath string, offset int64, data []byte) {
+	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		panic(err)
+	}
+
+	// todo 后续再处理异常
+	_, _ = file.Seek(offset, io.SeekStart)
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+	_, _ = reader.Read(data)
+}
 
 // getFileName
 // getLong

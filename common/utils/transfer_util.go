@@ -7,17 +7,20 @@ import (
 	"fmt"
 )
 
-func Int32ToBytes(n int32) []byte {
+func IntToBytes(n int) []byte {
 	buffer := bytes.NewBuffer([]byte{})
-	_ = binary.Write(buffer, binary.BigEndian, n)
+	err := binary.Write(buffer, binary.BigEndian, int32(n))
+	if err != nil {
+		panic(err)
+	}
 	return buffer.Bytes()
 }
 
-func BytesToInt32(bys []byte) int32 {
+func BytesToInt(bys []byte) int {
 	buffer := bytes.NewBuffer(bys)
 	var data int32
 	_ = binary.Read(buffer, binary.BigEndian, &data)
-	return data
+	return int(data)
 }
 
 func Int64ToBytes(n int64) []byte {

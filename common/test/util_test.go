@@ -1,13 +1,13 @@
 package test
 
 import (
-	"mqcommon/message"
-	"mqcommon/utils"
+	"common/message"
+	"common/utils"
 	"testing"
 )
 
 func TestInt2Byte(t *testing.T) {
-	bytes := utils.Int32ToBytes(1000)
+	bytes := utils.IntToBytes(76)
 	for _, v := range bytes {
 		print(v, " ")
 	}

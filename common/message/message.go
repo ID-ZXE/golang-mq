@@ -1,6 +1,8 @@
 package message
 
-import "mqcommon/utils"
+import (
+	"encoding/json"
+)
 
 type Message struct {
 	MsgId         string
@@ -18,12 +20,17 @@ func NewMessageWithMsgId(msgId string) *Message {
 	return &Message{MsgId: msgId}
 }
 
-func (message *Message) LoadBody(v interface{}) {
-	utils.JsonStringToBean(message.Body, v)
+func (msg *Message) LoadBody(v interface{}) {
+	_ = json.Unmarshal([]byte(msg.Body), v)
 }
 
 func ToMessage(data []byte) *Message {
 	result := &Message{}
-	utils.JsonBytesToBean(data, result)
+	_ = json.Unmarshal(data, result)
+	return result
+}
+
+func (msg *Message) MessageToJsonByte() []byte {
+	result, _ := json.Marshal(msg)
 	return result
 }
