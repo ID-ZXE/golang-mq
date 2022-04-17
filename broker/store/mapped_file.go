@@ -29,14 +29,13 @@ type MappedFile struct {
 	filePath   string        //文件路径
 	fileName   string        //文件名
 	writer     *bufio.Writer //操作写
-	reader     *bufio.Reader //操作读
 	fromOffset int64         //文件起始offset
 	fileSize   int64         //文件大小
 	wrotePos   int64         //当前写入位置
 }
 
-func NewMappedFile(fileType constant.FileType, fileName string) *MappedFile {
-	filePath := constant.GetFilePath(fileType) + fileName
+func NewMappedFile(fileType constant.FileType, base string) *MappedFile {
+	filePath := constant.GetFilePath(fileType) + base
 
 	dir, _ := filepath.Split(filePath)
 	ensureDirExist(dir)
@@ -54,7 +53,6 @@ func newMappedFile(fileType constant.FileType, filePath string, file *os.File) *
 	mappedFile.fileSize = constant.GetFileSize(fileType)
 	mappedFile.fileName = file.Name()
 	mappedFile.filePath = filePath
-	mappedFile.reader = bufio.NewReader(file)
 	mappedFile.writer = bufio.NewWriter(file)
 	mappedFile.wrotePos = 0
 
@@ -96,7 +94,6 @@ func (mappedFile *MappedFile) Append(data []byte) MessageAppendResult {
 	if err != nil {
 		return IoException
 	}
-
 	return OK
 }
 
@@ -116,11 +113,20 @@ func (mappedFile MappedFile) GetInt(offset int64) int {
 
 func (mappedFile MappedFile) UpdateInt(offset int64) (err error) {
 	_, err = mappedFile.file.Seek(offset, io.SeekStart)
+	if err == nil {
+		int32Bytes := utils.IntToBytes(int(offset))
+		_, err = mappedFile.writer.Write(int32Bytes)
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
 
-	int32Bytes := utils.IntToBytes(int(offset))
-	_, _ = mappedFile.writer.Write(int32Bytes)
-
-	return
+func (mappedFile MappedFile) GetInt64(offset int64) int64 {
+	intBytes := make([]byte, 8)
+	readByNewFileHandle(mappedFile.filePath, offset, intBytes)
+	return utils.BytesToInt64(intBytes)
 }
 
 func (mappedFile MappedFile) LoadMessage(offset int64, size int) *message.Message {
@@ -139,6 +145,10 @@ func (mappedFile *MappedFile) GetFromOffset() int64 {
 
 func (mappedFile *MappedFile) GetWrotePos() int64 {
 	return mappedFile.wrotePos
+}
+
+func (mappedFile *MappedFile) SetWrotePos(wrotePos int64) {
+	mappedFile.wrotePos = wrotePos
 }
 
 // 起一个新的文件句柄读取数据

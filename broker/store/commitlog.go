@@ -6,6 +6,9 @@ import (
 	"github.com/common/utils"
 	"log"
 	"os"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -15,17 +18,17 @@ type Commitlog struct {
 	mu              sync.Mutex       //并发锁
 }
 
-type PutMessageResult string
+type CommitlogPutMessageResult string
 
 const (
-	SUCCESS PutMessageResult = "SUCCESS"
-	FAILURE PutMessageResult = "FAILURE"
+	SUCCESS CommitlogPutMessageResult = "SUCCESS"
+	FAILURE CommitlogPutMessageResult = "FAILURE"
 )
 
 type CommitPutMessageResult struct {
 	msgSize int
 	offset  int64
-	result  PutMessageResult
+	result  CommitlogPutMessageResult
 }
 
 var CommitLogInstance *Commitlog
@@ -34,16 +37,58 @@ func init() {
 	CommitLogInstance = &Commitlog{mappedFileQueue: NewMappedFileQueue()}
 	CommitLogInstance.ensureDirExist()
 	CommitLogInstance.createDefaultFile()
+	CommitLogInstance.recover()
+}
+
+func (commitlog *Commitlog) recover() {
+	log.Println("commit recover")
+	commitlog.ensureDirExist()
+	dirs, err := os.ReadDir(constant.GetFilePath(constant.Commitlog))
+	if err != nil {
+		panic(err)
+	}
+
+	fileNames := make([]int64, 0)
+	for _, dir := range dirs {
+		// 过滤文件夹与隐藏文件
+		if !dir.IsDir() && strings.Contains(dir.Name(), ".") {
+			fileNameInt, err := strconv.ParseInt(dir.Name(), 10, 64)
+			if err != nil {
+				continue
+			}
+			fileNames = append(fileNames, fileNameInt)
+		}
+	}
+	// int64排序
+	sort.Slice(fileNames, func(i, j int) bool {
+		return fileNames[i] < fileNames[j]
+	})
+	for _, fileName64 := range fileNames {
+		mappedFile := NewMappedFile(constant.Commitlog, strconv.FormatInt(fileName64, 10))
+		commitlog.mappedFileQueue.addMappedFile(mappedFile)
+	}
+
+	if !commitlog.mappedFileQueue.isEmpty() {
+		lastMappedFile := commitlog.mappedFileQueue.getLastMappedFile()
+		var offset int64 = 0
+		for {
+			size := lastMappedFile.GetInt(offset)
+			if size == 0 {
+				break
+			}
+			msg := lastMappedFile.LoadMessage(offset, size)
+			if msg == nil {
+				break
+			}
+			offset += int64(IntLength + size)
+		}
+		log.Printf("commit recover, current wrote pos:%d\n", offset)
+		lastMappedFile.SetWrotePos(offset)
+	}
 }
 
 func (commitlog *Commitlog) ensureDirExist() {
-	_, err := os.Stat(constant.GetFilePath(constant.Commitlog))
-	if os.IsNotExist(err) {
-		err := os.MkdirAll(constant.GetFilePath(constant.Commitlog), 0777)
-		if err != nil {
-			panic(err)
-		}
-	}
+	ensureDirExist(constant.GetFilePath(constant.Commitlog))
 }
 
 func (commitlog *Commitlog) createDefaultFile() {
@@ -51,10 +96,6 @@ func (commitlog *Commitlog) createDefaultFile() {
 		mappedFile := NewMappedFile(constant.Commitlog, "0")
 		commitlog.mappedFileQueue.addMappedFile(mappedFile)
 	}
-}
-
-func (commitlog *Commitlog) Recover() {
-
 }
 
 func (commitlog *Commitlog) PutMessage(msg *message.Message) *CommitPutMessageResult {
@@ -77,6 +118,19 @@ func (commitlog *Commitlog) PutMessage(msg *message.Message) *CommitPutMessageRe
 	}
 	commitlog.commitLogOffset += int64(len(data))
 	return successPutMessageResult(fileWritePos, len(msgBytes))
+}
+
+func (commitlog *Commitlog) GetMessage(offset int64) *message.Message {
+	mappedFile := commitlog.mappedFileQueue.GetMappedFileByOffset(offset)
+	if mappedFile == nil {
+		return nil
+	}
+	byteSize := mappedFile.GetInt(offset - mappedFile.fromOffset)
+	if byteSize == 0 {
+		return nil
+	}
+	pos := offset - mappedFile.fromOffset + IntLength
+	return mappedFile.LoadMessage(pos, byteSize)
 }
 
 func successPutMessageResult(offset int64, msgSize int) *CommitPutMessageResult {

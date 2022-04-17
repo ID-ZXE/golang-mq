@@ -7,13 +7,13 @@ import (
 type Message struct {
 	MsgId         string
 	Topic         string
-	QueueId       int32
+	QueueId       int
 	ConsumerGroup string
 	Body          string
 }
 
-func NewMessage(topic string, body string, msgId string) *Message {
-	return &Message{Topic: topic, Body: body, MsgId: msgId}
+func NewMessage(topic string, queueId int, msgId string, body string) *Message {
+	return &Message{Topic: topic, QueueId: queueId, MsgId: msgId, Body: body}
 }
 
 func NewMessageWithMsgId(msgId string) *Message {
