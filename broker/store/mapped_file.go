@@ -111,10 +111,10 @@ func (mappedFile MappedFile) GetInt(offset int64) int {
 	return utils.BytesToInt(intBytes)
 }
 
-func (mappedFile MappedFile) UpdateInt(offset int64) (err error) {
+func (mappedFile MappedFile) UpdateInt(offset int64, n int) (err error) {
 	_, err = mappedFile.file.Seek(offset, io.SeekStart)
 	if err == nil {
-		int32Bytes := utils.IntToBytes(int(offset))
+		int32Bytes := utils.IntToBytes(n)
 		_, err = mappedFile.writer.Write(int32Bytes)
 		if err != nil {
 			return err
@@ -165,9 +165,3 @@ func readByNewFileHandle(filePath string, offset int64, data []byte) {
 	reader := bufio.NewReader(file)
 	_, _ = reader.Read(data)
 }
-
-// getFileName
-// getLong
-// updateLong
-// setWrote
-// getWrote

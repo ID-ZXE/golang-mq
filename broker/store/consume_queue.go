@@ -5,7 +5,10 @@ import (
 	"broker/store/constant"
 	"github.com/common/utils"
 	"log"
+	"os"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -41,7 +44,76 @@ func init() {
  * step4: 每一个文件封装成 MappedFile 然后保存
  */
 func (consumeQueue *ConsumeQueue) recover() {
+	dirs, err := os.ReadDir(constant.GetFilePath(constant.ConsumeQueue))
+	if err != nil {
+		panic(err)
+	}
 
+	for _, dir := range dirs {
+		if !dir.IsDir() || strings.Contains(dir.Name(), ".") {
+			continue
+		}
+		consumeQueue.recoverMappedFile(dir.Name())
+	}
+}
+
+func (consumeQueue *ConsumeQueue) recoverMappedFile(topic string) {
+	queueDirs, err := os.ReadDir(constant.GetFilePath(constant.ConsumeQueue))
+	if err != nil {
+		panic(err)
+	}
+
+	for _, queueDir := range queueDirs {
+		if queueDir.IsDir() || strings.Contains(queueDir.Name(), ".") {
+			continue
+		}
+
+		queueId := queueDir.Name()
+		queueIdVal, err := strconv.Atoi(queueId)
+		if err != nil {
+			continue
+		}
+
+		queueDirPath := config.JoinFilePath(constant.GetFilePath(constant.ConsumeQueue), topic, queueId)
+		consumeQueueFiles, err := os.ReadDir(queueDirPath)
+		if err != nil {
+			panic(err)
+		}
+
+		names := make([]string, 0)
+		for _, consumeQueueFile := range consumeQueueFiles {
+			names = append(names, consumeQueueFile.Name())
+		}
+		sort.Strings(names)
+
+		for _, name := range names {
+			mappedFile := NewMappedFile(constant.ConsumeQueue, config.JoinFilePath(topic, queueId, name))
+			queueIdMap := consumeQueue.mappedFileMap[topic]
+			if queueIdMap == nil {
+				queueIdMap = make(map[int]*MappedFileQueue, 0)
+				consumeQueue.mappedFileMap[topic] = queueIdMap
+			}
+			mappedFileQueue := queueIdMap[queueIdVal]
+			if mappedFileQueue == nil {
+				mappedFileQueue = NewMappedFileQueue()
+				queueIdMap[queueIdVal] = mappedFileQueue
+			}
+			mappedFileQueue.addMappedFile(mappedFile)
+		}
+
+		if !consumeQueue.mappedFileMap[topic][queueIdVal].isEmpty() {
+			lastMappedFile := consumeQueue.mappedFileMap[topic][queueIdVal].getLastMappedFile()
+			var offset int64 = 0
+			for {
+				size := lastMappedFile.GetInt64(0)
+				if size == 0 {
+					break
+				}
+				offset += LongLength
+			}
+			lastMappedFile.SetWrotePos(offset)
+		}
+	}
 }
 
 func GetConsumeQueueInstance() *ConsumeQueue {
@@ -57,8 +129,7 @@ func GetConsumeQueueInstance() *ConsumeQueue {
 }
 
 func NewConsumeQueue() *ConsumeQueue {
-	consumeQueue := &ConsumeQueue{mappedFileMap: make(map[string]QueueIdMap, 0), consumeOffset: GetConsumeOffsetInstance()}
-	return consumeQueue
+	return &ConsumeQueue{mappedFileMap: make(map[string]QueueIdMap, 0), consumeOffset: GetConsumeOffsetInstance()}
 }
 
 func (consumeQueue *ConsumeQueue) PutMessage(topic string, queueId int, commitlogOffset int64) ConsumeQueuePutMessageResult {

@@ -49,7 +49,7 @@ func (consumeOffset *ConsumeOffset) IncrOffset(topic string, queueId int, group 
 		return errors.New("can not find mapped file")
 	}
 	seq := mappedFile.GetInt(0)
-	err := mappedFile.UpdateInt(int64(seq + 1))
+	err := mappedFile.UpdateInt(0, seq+1)
 	return err
 }
 
